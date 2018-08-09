@@ -66,7 +66,8 @@ const ensureDirExists = (targetDir, isRelativeToScript = false) => {
 
 const app = (req, res) => {
   const { url } = req;
-  mirrors.some(([cdnUrl, prefix]) => {
+
+  const match = mirrors.some(([cdnUrl, prefix]) => {
     if (prefix === url.slice(0, prefix.length)) {
       const localPath = path.join(MIRRORS_PATH, URL.parse(url).pathname);
       fs.access(localPath, fs.constants.F_OK, (err) => {
@@ -104,6 +105,11 @@ const app = (req, res) => {
     }
     return false;
   });
+
+  if (!match) {
+    res.writeHead(404, 'Not Found', {});
+    res.end();
+  }
 };
 
 const server = http.createServer(app);
