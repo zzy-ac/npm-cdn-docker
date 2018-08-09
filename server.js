@@ -17,14 +17,14 @@ node_inspector_cdnurl https://npm.taobao.org/mirrors/node-inspector # node-inspe
 */
 
 const mirrors = [
- ['https://npm.taobao.org/dist', '/node-dist'],
- ['https://npm.taobao.org/mirrors/node-sass', '/node-sass'],
- ['https://npm.taobao.org/mirrors/electron', '/electron'],
- ['https://npm.taobao.org/mirrors/chromedriver', '/chromedriver'],
- ['https://npm.taobao.org/mirrors/operadriver', '/operadriver'],
- ['https://npm.taobao.org/mirrors/phantomjs', '/phantomjs'],
- ['https://npm.taobao.org/mirrors/selenium', '/selenium'],
- ['https://npm.taobao.org/mirrors/node-inspector', '/node-inspector'],
+  ['https://npm.taobao.org/dist', '/node-dist'],
+  ['https://npm.taobao.org/mirrors/node-sass', '/node-sass'],
+  ['https://npm.taobao.org/mirrors/electron', '/electron'],
+  ['https://npm.taobao.org/mirrors/chromedriver', '/chromedriver'],
+  ['https://npm.taobao.org/mirrors/operadriver', '/operadriver'],
+  ['https://npm.taobao.org/mirrors/phantomjs', '/phantomjs'],
+  ['https://npm.taobao.org/mirrors/selenium', '/selenium'],
+  ['https://npm.taobao.org/mirrors/node-inspector', '/node-inspector'],
 ];
 
 const MIRRORS_PATH = process.env.MIRRORS_PATH || './mirrors';
@@ -61,22 +61,36 @@ const ensureDirExists = (targetDir, isRelativeToScript = false) => {
     }
 
     return curDir;
-  }, initDir); 
+  }, initDir);
+};
+
+const makeFetch = (fullUrl, cb) => {
+  const { host, protocol, path: p } = URL.parse(fullUrl);
+  (protocol === 'https:' ? https : http)['get'](fullUrl, (resp) => {
+    if ([301, 302, 307, 308].includes(resp.statusCode)) {
+      const url = resp.headers.location;
+      makeFetch(url, cb);
+    } else {
+      cb(resp);
+    }
+  });
 };
 
 const app = (req, res) => {
   const { url } = req;
 
   const match = mirrors.some(([cdnUrl, prefix]) => {
+
+
     if (prefix === url.slice(0, prefix.length)) {
       const localPath = path.join(MIRRORS_PATH, URL.parse(url).pathname);
+
       fs.access(localPath, fs.constants.F_OK, (err) => {
         if (err) {
           const fullUrl = cdnUrl + url.slice(prefix.length);
-          const { host, path: p } = URL.parse(fullUrl);
-          const agent = new http.Agent({ keepAlive: false });
+          const { host, protocol, path: p } = URL.parse(fullUrl);
 
-          https.get({ host, path: p, agent, headers: { ...req.headers, host } }, (reqRes) => {
+          makeFetch(fullUrl, (reqRes) => {
             res.writeHead(reqRes.statusCode, reqRes.statusMesage, reqRes.headers);
 
             const dir = path.dirname(localPath);
@@ -88,7 +102,6 @@ const app = (req, res) => {
               res.write(chunck);
             });
             reqRes.on('end', (ed) => {
-              console.log(ed);
               ws.end();
               fs.rename(inComming, localPath, () => res.end());
             });
